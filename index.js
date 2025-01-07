@@ -90,25 +90,67 @@ connectWebSocket();
 
 // Endpoint GET untuk mengambil data dari database
 app.get('/data', (req, res) => {
-  const query = 'SELECT * FROM citizen_records';
+  const citizenRecordsQuery = 'SELECT * FROM citizen_records';
+  const imsiDataQuery = 'SELECT * FROM imsi_data WHERE citizen_record_id = ?';
 
-  connection.query(query, (error, results, fields) => {
+  connection.query(citizenRecordsQuery, async (error, citizenRecords, fields) => {
     if (error) {
       console.error('Error executing query:', error.stack);
-      res.status(500).send('Error retrieving data from database');
-      return;
+      return res.status(500).send('Error retrieving data from database');
     }
-    const host = req.get('host'); // Misalnya: "example.com" atau "192.168.1.100:3000"
-    const protocol = req.protocol; // "http" atau "https"
 
-    // Modifikasi hasil query untuk menyertakan URL gambar
-    const modifiedResults = results.map((record) => {
-      if (record.image_data_capture) {
-        // Buat URL lengkap berdasarkan host dan protocol
-        record.image_data_capture = `${protocol}://${host}:8888/${record.image_data_capture}`;
-      }
-      return record;
-    });
+    const host = req.get('host');
+    const protocol = req.protocol;
+
+    // Modifikasi hasil query untuk menyertakan URL gambar dan data IMSI
+    const modifiedResults = await Promise.all(
+      citizenRecords.map(async (record) => {
+        if (record.image_data_capture) {
+          // Buat URL lengkap berdasarkan host dan protocol
+          record.image_data_capture = `${protocol}://${host}:8888/${record.image_data_capture}`;
+        }
+
+        // Ambil data IMSI berdasarkan citizen_record_id
+        const imsiData = await new Promise((resolve, reject) => {
+          connection.query(imsiDataQuery, [record.id], (error, results) => {
+            if (error) {
+              console.error('Error fetching IMSI data:', error.stack);
+              reject(error);
+            } else {
+              resolve(results);
+            }
+          });
+        });
+
+        // Filter IMSI data dengan status 1
+        const imsiDataFiltered = imsiData.filter(imsi => imsi.status === 1);
+
+        // Cari IMSI dengan rssi dan rsrp terbesar
+        const maxRssiAndRsrpImsi = imsiDataFiltered.reduce((max, imsi) => {
+          if (imsi.rssi > max.rssi && imsi.rsrp > max.rsrp) {
+            return imsi;
+          }
+          return max;
+        }, { rssi: -Infinity, rsrp: -Infinity }); // Inisialisasi dengan nilai default
+
+        // Jika tidak ada data IMSI yang memenuhi kriteria, kembalikan objek dengan nilai null
+        if (imsiDataFiltered.length === 0) {
+          record.imsi_data = {
+            imsi: null,
+            rsrp: null,
+            rssi: null,
+            time: null,
+            ip: null,
+            status: null,
+            provider: null
+          };
+        } else {
+          record.imsi_data = maxRssiAndRsrpImsi;
+        }
+
+        return record;
+      })
+    );
 
     res.json(modifiedResults);
   });

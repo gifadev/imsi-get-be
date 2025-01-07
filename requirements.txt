@@ -1,0 +1,4 @@
+npm install mysql
+npm install ws
+npm install multer
+npm install axios

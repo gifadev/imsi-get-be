@@ -124,7 +124,7 @@ app.get('/data', (req, res) => {
 
         // Filter IMSI data dengan status 1
         const imsiDataFiltered = imsiData.filter(imsi => imsi.status === 1);
-
+        // console.log("imsiDataFiltered ===",imsiDataFiltered)
         // Cari IMSI dengan rssi dan rsrp terbesar
         const maxRssiAndRsrpImsi = imsiDataFiltered.reduce((max, imsi) => {
           if (imsi.rssi > max.rssi && imsi.rsrp > max.rsrp) {
@@ -299,6 +299,7 @@ app.post('/upload', upload.single('image_data_capture'), (req, res) => {
           if (imsiResponse.data.status === 'success' && imsiResponse.data.data.length > 0) {
             // Jika data IMSI tersedia, simpan ke database
             const imsiData = imsiResponse.data.data;
+            // console.log("Inin Imsi Dataaa ", imsiData)
 
             for (const imsi of imsiData) {
               const imsiQuery = `
